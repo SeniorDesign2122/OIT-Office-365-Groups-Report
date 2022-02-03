@@ -29,8 +29,7 @@ Install-Module -Name MicrosoftTeams -RequiredVersion 3.0.0
 #./ConnectO365Services.ps1 -Services AzureAD, SharePoint, ExchangeOnline,Teams -SharePointHostName wexchange.wmich.edu -MFA
 
 #Connects to Teams cant get powershell to work as of now / SharePoint still not connecting with MFA
-./service_connect.ps1 -Services AzureAD, SharePoint, ExchangeOnline,Teams -SharePointHostName wmutest1 
-#-UserName cs4900_admin@wmutest1.onmicrosof.com -Password "????"
+./service_connect.ps1 -Services AzureAD, SharePoint, ExchangeOnline,Teams -SharePointHostName wmutest1 -UserName cs4900_admin@wmutest1.onmicrosoft.com -Password "???"
 
 
 
