@@ -8,7 +8,7 @@ Param
     [string]$SharePointHostName,
     [Switch]$MFA,
     [string]$UserName, 
-    [string]$Password
+    [SecureString]$Password
 )
 
 #Disconnecting Sessions
@@ -26,9 +26,8 @@ if($Disconnect.IsPresent)
 else
 {
  if(($UserName -ne "") -and ($Password -ne "")) 
- { 
-  $SecuredPassword = ConvertTo-SecureString -AsPlainText $Password -Force 
-  $Credential  = New-Object System.Management.Automation.PSCredential $UserName,$SecuredPassword 
+ {  
+  $Credential  = New-Object System.Management.Automation.PSCredential $UserName,$Password 
  } 
 
  #Getting credential for non-MFA account
