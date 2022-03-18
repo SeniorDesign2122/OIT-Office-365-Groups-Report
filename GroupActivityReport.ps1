@@ -23,7 +23,33 @@
 
 #Set-Location -Path "C:\Users\codem\Documents\Code\OIT DEV"
 #.\TeamsGroupActivityReport.ps1
-./ConnectO365Services.ps1 -Services AzureAD, ExchangeOnline, SharePoint, Teams -SharePointHostName wmutest1 -UserName cs4900_admin@wmutest1.onmicrosoft.com -Password "Rax75524"
+
+Function Get-SavedCredential([string]$UserName,[string]$KeyPath)
+{
+    If(Test-Path "$($KeyPath)\$($Username).cred") {
+        $SecureString = Get-Content "$($KeyPath)\$($Username).cred" | ConvertTo-SecureString
+    }
+    Else {
+        #Saved Credentials do not exist 
+        If (!(Test-Path $KeyPath)) {        
+            Try {
+                New-Item -ItemType Directory -Path "$($KeyPath)" -ErrorAction STOP | Out-Null
+            }
+            Catch {
+                Throw $_.Exception.Message
+            }
+        }
+        #store password encrypted in file
+        $Credential = Get-Credential -Message "Enter the Credentials:" -UserName $UserName
+        $Credential.Password | ConvertFrom-SecureString | Out-File "$($KeyPath)\$($Credential.Username).cred" -Force
+        Get-SavedCredential -UserName $Username -KeyPath ".\"
+    }
+    Return $SecureString
+}
+
+$SecureString = Get-SavedCredential -UserName "cs4900_admin@wmutest1.onmicrosoft.com" -KeyPath ".\"
+
+./ConnectO365Services.ps1 -Services AzureAD, ExchangeOnline, SharePoint, Teams -SharePointHostName wmutest1 -UserName cs4900_admin@wmutest1.onmicrosoft.com -Password $SecureString
 
 CLS #Clears text printed above
 
