@@ -41,6 +41,9 @@ Function Get-SavedCredential([string]$UserName,[string]$KeyPath)
         }
         #store password encrypted in file
         $Credential = Get-Credential -Message "Enter the Credentials:" -UserName $UserName
+	if ($Null -eq $Credential.Password){
+		return $Null
+	}
         $Credential.Password | ConvertFrom-SecureString | Out-File "$($KeyPath)\$($Credential.Username).cred" -Force
         Get-SavedCredential -UserName $Username -KeyPath ".\"
     }
@@ -48,6 +51,10 @@ Function Get-SavedCredential([string]$UserName,[string]$KeyPath)
 }
 
 $SecureString = Get-SavedCredential -UserName "cs4900_admin@wmutest1.onmicrosoft.com" -KeyPath ".\"
+
+if ($Null -eq $SecureString){
+   Exit
+}
 
 ./ConnectO365Services.ps1 -Services AzureAD, ExchangeOnline, SharePoint, Teams -SharePointHostName wmutest1 -UserName cs4900_admin@wmutest1.onmicrosoft.com -Password $SecureString
 
