@@ -1,28 +1,12 @@
-# TeamsGroupsActivityReport.PS1
+
 # A script to check the activity of Microsoft 365 Groups and Teams and report the groups and teams that might be deleted because they're not used.
 # We check the group mailbox to see what the last time a conversation item was added to the Inbox folder. 
 # Another check sees whether a low number of items exist in the mailbox, which would show that it's not being used.
 # We also check the group document library in SharePoint Online to see whether it exists or has been used in the last 90 days.
 # And we check Teams compliance items to figure out if any chatting is happening.
 
-# Created 29-July-2016  Tony Redmond 
-# V2.0 5-Jan-2018
-# V3.0 17-Dec-2018
-# V4.0 11-Jan-2020
-# V4.1 15-Jan-2020 Better handling of the Team Chat folder
-# V4.2 30-Apr-2020 Replaced $G.Alias with $G.ExternalDirectoryObjectId. Fixed problem with getting last conversation from Groups where no conversations are present.
-# V4.3 13-May-2020 Fixed bug and removed the need to load the Teams PowerShell module
-# V4.4 14-May-2020 Added check to exit script if no Microsoft 365 Groups are found
-# V4.5 15-May-2020 Some people reported that Get-Recipient is unreliable when fetching Groups, so added code to revert to Get-UnifiedGroup if nothing is returned by Get-Recipient
-# V4.6 8-Sept-2020 Better handling of groups where the SharePoint team site hasn't been created
-# V4.7 13-Oct-2020 Teams compliance records are now in a different location in group mailboxes
-# V4.8 16-Dec-2020 Some updates after review of code to create 5.0 (Graph based version)
-# 
-# https://github.com/12Knocksinna/Office365itpros/blob/master/TeamsGroupsActivityReport.ps1
-#
-
 #Set-Location -Path "C:\Users\codem\Documents\Code\OIT DEV"
-#.\TeamsGroupActivityReport.ps1
+#.\GroupActivityReport.ps1
 
 Function Get-SavedCredential([string]$KeyPath)
 {
@@ -49,6 +33,7 @@ $UserName, $SecureString = Get-SavedCredential  -KeyPath "Credentials"
 
 ./ConnectO365Services.ps1 -Services AzureAD, ExchangeOnline, SharePoint, Teams -SharePointHostName wmutest1 -UserName $UserName -Password $SecureString
 
+#./ConnectO365Services.ps1 -Services AzureAD, MSOnline, ExchangeOnline, SharePoint, Teams -SharePointHostName wmutest1 -UserName cs4900_admin@wmutest1.onmicrosoft.com -Password "Rax75524"
 
 CLS #Clears text printed above
 
@@ -69,8 +54,8 @@ $htmlhead="<html>
 	   H2{font-size: 18px; font-family: 'Segoe UI Light','Segoe UI','Lucida Grande',Verdana,Arial,Helvetica,sans-serif;}
 	   H3{font-size: 16px; font-family: 'Segoe UI Light','Segoe UI','Lucida Grande',Verdana,Arial,Helvetica,sans-serif;}
 	   TABLE{border: 1px solid black; border-collapse: collapse; font-size: 8pt;}
-	   TH{border: 1px solid #969595; background: #dddddd; padding: 5px; color: #000000;}
-	   TD{border: 1px solid #969595; padding: 5px; }
+	   th{border: 1px solid #969595; background: #dddddd; padding: 5px; color: #000000;}
+	   td{border: 1px solid #969595; padding: 5px; }
 	   td.pass{background: #B7EB83;}
 	   td.warn{background: #FFF275;}
 	   td.fail{background: #FF2626; color: #ffffff;}
@@ -114,16 +99,26 @@ ForEach ($Group in $Groups) { #Because we fetched the list of groups with Get-Re
    Write-Progress -Activity "Checking group" -Status $GroupStatus -PercentComplete $CheckCount
    $CheckCount += $ProgDelta;  $ObsoleteReportLine = $G.DisplayName;    $SPOStatus = "Normal"
    $SPOActivity = "Document library in use"; $SPOStorage = 0
-   $NumberWarnings = 0;   $NumberofChats = 0;  $TeamChatData = $Null;  $TeamsEnabled = $False;  $LastItemAddedtoTeams = "N/A";  $MailboxStatus = $Null; $ObsoleteReportLine = $Null
+   $NumberWarnings = 0;   $NumberofChats = 0;  $TeamsChatData = $Null;  $TeamsEnabled = $False;  $LastItemAddedtoTeams = "N/A";  $MailboxStatus = $Null; $ObsoleteReportLine = $Null
 # Check who manages the group
   $ManagedBy = $G.ManagedBy
   If ([string]::IsNullOrWhiteSpace($ManagedBy) -and [string]::IsNullOrEmpty($ManagedBy)) {
-     $ManagedBy = "No owners"
+     $ManagedBy = "***NO OWNERS!***"
      Write-Host $G.DisplayName "has no group owners!" -ForegroundColor Red}
   Else {
-     $ManagedBy = (Get-ExoMailbox -Identity $G.ManagedBy[0]).DisplayName}
+      #$ManagedBy = (Get-ExoMailbox -Identity $G.ManagedBy[0]).DisplayName
+      $ManagedBy = $G.ManagedBy -join ", "
+
+      #$ManagedBy = Get-UnifiedGroupLinks -LinkType Owners -Identity $G.Id | Select DisplayName
+  }
+
+
+
+
+
 # Group Age
-  $GroupAge = (New-TimeSpan -Start $G.WhenCreated -End $Today).Days
+   $GroupAge = (New-TimeSpan -Start $G.WhenCreated -End $Today).Days
+  
 # Fetch information about activity in the Inbox folder of the group mailbox  
    $Data = (Get-ExoMailboxFolderStatistics -Identity $G.ExternalDirectoryObjectId -IncludeOldestAndNewestITems -FolderScope Inbox)
    If ([string]::IsNullOrEmpty($Data.NewestItemReceivedDate)) {$LastConversation = "No items found"}           
@@ -183,9 +178,13 @@ ForEach ($Group in $Groups) { #Because we fetched the list of groups with Get-Re
        {
        $Status = "Warning"
     }
-    If ($NumberWarnings -gt 1)
+    If ($NumberWarnings -eq 2)
        {
        $Status = "Fail"
+    } 
+    If ($NumberWarnings -gt 3)
+       {
+       $Status = "Severe"
     } 
 
 # If the group is team-enabled, find the date of the last Teams conversation compliance record
@@ -219,24 +218,24 @@ If (($TeamsEnabled -eq $True) -and ($NumberOfChats -le 100)) { Write-Host "Team-
 
 # Generate a line for this group and store it in the report
     $ReportLine = [PSCustomObject][Ordered]@{
-          GroupName           = $G.DisplayName
-          ManagedBy           = $ManagedBy
-          Members             = $G.GroupMemberCount
-          ExternalGuests      = $G.GroupExternalMemberCount
-          Description         = $G.Notes
-          MailboxStatus       = $MailboxStatus
-          TeamEnabled         = $TeamsEnabled
-          LastChat            = $LastItemAddedtoTeams
-          NumberChats         = $NumberofChats
-          LastConversation    = $LastConversation
-          NumberConversations = $NumberConversations
-          SPOActivity         = $SPOActivity
-          SPOStorageGB        = $SPOStorage
-          SPOStatus           = $SPOStatus
-          WhenCreated         = Get-Date ($G.WhenCreated) -Format g
-          DaysOld             = $GroupAge
-          NumberWarnings      = $NumberWarnings
-          Status              = $Status}
+          GroupName                 = $G.DisplayName
+          GroupOwners               = $ManagedBy
+          Members                   = $G.GroupMemberCount
+          ExternalGuests            = $G.GroupExternalMemberCount
+          GroupDescription          = $G.Notes
+          MailboxRecentActivity     = $MailboxStatus
+          LastMailboxConversation   = $LastConversation
+          GroupMailboxConversations = $NumberConversations
+          TeamsEnabled              = $TeamsEnabled
+          LastTeamsChat             = $LastItemAddedtoTeams
+          TeamsChats                = $NumberofChats
+          SharePointActivity        = $SPOActivity
+          SharePointStorageGB       = $SPOStorage
+          SharePointStatus          = $SPOStatus
+          GroupCreationDate         = Get-Date ($G.WhenCreated) -Format g
+          GroupAge_Days             = $GroupAge
+          NumberWarnings            = $NumberWarnings
+          Status                    = $Status}
    $Report.Add($ReportLine)   
 #End of main loop
 }
@@ -257,7 +256,7 @@ $htmltail = "<p>Report created for: " + $OrgName + "
              "<p>Number of Teams-enabled groups    : " + $TeamsCount + "</p>" +
              "<p>Percentage of Teams-enabled groups: " + $PercentTeams + "</body></html>" +
              "<p>-----------------------------------------------------------------------------------------------------------------------------"+
-             "<p>Microsoft 365 Groups and Teams Activity Report <b>V4.8</b>"	
+             "<p>Microsoft 365 Groups and Teams Activity Report"	
 $htmlreport = $htmlhead + $htmlbody + $htmltail
 $htmlreport | Out-File $ReportFile  -Encoding UTF8
 $Report | Export-CSV -NoTypeInformation $CSVFile
@@ -275,8 +274,10 @@ Write-Host "Percentage of Teams-enabled groups                              :" $
 Write-Host " "
 Write-Host "Summary report in" $ReportFile "and CSV in" $CSVFile
 
-# An example script used to illustrate a concept. More information about the topic can be found in the Office 365 for IT Pros eBook https://gum.co/O365IT/
-# and/or a relevant article on https://office365itpros.com or https://www.petri.com. See our post about the Office 365 for IT Pros repository # https://office365itpros.com/office-365-github-repository/ for information about the scripts we write.
-
-# Do not use our scripts in production until you are satisfied that the code meets the need of your organization. Never run any code downloaded from the Internet without
-# first validating the code in a non-production environment.
+#Disconnect Exchange Online, Skype and Security & Compliance center session
+Get-PSSession | Remove-PSSession
+#Disconnect Teams connection
+Disconnect-MicrosoftTeams
+#Disconnect SharePoint connection
+Disconnect-SPOService
+Write-Host All sessions in the current window has been removed. -ForegroundColor Yellow
