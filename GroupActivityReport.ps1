@@ -324,24 +324,19 @@ ForEach ($Group in $Groups) { #Because we fetched the list of groups with Get-Re
          
          # Generate a line for this group and store it in the report
          $ReportLine = [PSCustomObject][Ordered]@{
-            GroupName                 = $G.DisplayName
-            GroupOwners               = $ManagedBy
-            Members                   = $G.GroupMemberCount
-            ExternalGuests            = $G.GroupExternalMemberCount
-            GroupDescription          = $G.Notes
-            MailboxRecentActivity     = $MailboxStatus
-            LastMailboxConversation   = $LastConversation
-            GroupMailboxConversations = $NumberConversations
-            TeamsEnabled              = $TeamsEnabled
-            LastTeamsChat             = $LastItemAddedtoTeams
-            TeamsChats                = $NumberofChats
-            SharePointActivity        = $SPOActivity
-            SharePointStorageGB       = $SPOStorage
-            SharePointStatus          = $SPOStatus
-            GroupCreationDate         = Get-Date ($G.WhenCreated) -Format g
-            GroupAge_Days             = $GroupAge
-            NumberWarnings            = $NumberWarnings
-            Status                    = $Status}
+            'Group Id'                                                              = $G.Id
+            'Group Name'                                                            = $G.DisplayName
+            'Group Creation Date'                                                   = Get-Date ($G.WhenCreated) -Format g
+            'Group Owners'                                                          = $ManagedBy
+            Members                                                                 = $G.GroupMemberCount
+            'External Guests'                                                       = $G.GroupExternalMemberCount
+            'Group Description'                                                     = $G.Notes
+            "Exchange`nRecent Activity | Last Conversation | Group Conversations"   = "$MailboxStatus | $LastConversation | $NumberConversations"
+            "Teams`nEnabled | Last Chat | Chats"                                    = "$TeamsEnabled | $LastItemAddedtoTeams | $NumberofChats"
+            "Share Point`nActivity | Storage GB | Status"                           = "$SPOActivity | $SPOStorage | $SPOStatus"
+            'Group Age Days'                                                        = $GroupAge
+            'Number of Warnings'                                                    = $NumberWarnings
+            Status                                                                  = $Status}
          $Report.Add($ReportLine)
    
       #End of main loop
