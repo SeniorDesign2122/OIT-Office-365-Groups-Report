@@ -326,7 +326,7 @@ ForEach ($Group in $Groups) { #Because we fetched the list of groups with Get-Re
          $ReportLine = [PSCustomObject][Ordered]@{
             'Group Id'                                                              = $G.Id
             'Group Name'                                                            = $G.DisplayName
-            'Group Creation Date'                                                   = Get-Date ($G.WhenCreated) -Format g
+            'Group Creation Date'                                                   = Get-Date ($G.WhenCreated) -UFormat "%b/%d/%Y"
             'Group Owners'                                                          = $ManagedBy
             Members                                                                 = $G.GroupMemberCount
             'External Guests'                                                       = $G.GroupExternalMemberCount
