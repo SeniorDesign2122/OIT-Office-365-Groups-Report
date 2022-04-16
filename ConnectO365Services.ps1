@@ -46,6 +46,7 @@ else
  }
 
  #Loop through each required services
+ Write-Host "`nChecking connections to $Services"
  Foreach($Service in $RequiredServices)
  {
   Write-Host Checking connection to $Service...
@@ -72,11 +73,11 @@ else
     }
     if($mfa.IsPresent)
     {
-     Connect-ExchangeOnline
+     Connect-ExchangeOnline -ShowBanner:$false
     }
     else
     {
-     Connect-ExchangeOnline -Credential $Credential
+     Connect-ExchangeOnline -ShowBanner:$false -Credential $Credential
     }
     If((Get-EXOMailbox -ResultSize 1) -ne $null)
     {
@@ -153,11 +154,11 @@ else
     }
     if($mfa.IsPresent)
     {
-     Connect-AzureAD
+     $null = Connect-AzureAD
     }
     else
     {
-     Connect-AzureAD -Credential $Credential
+     $null = Connect-AzureAD -Credential $Credential
     }
     If((Get-AzureADUser -Top 1) -ne $null)
     {
@@ -377,5 +378,5 @@ else
  {
   $ConnectedServices="-"
  }
- Write-Host `n`nConnected Services $ConnectedServices -ForegroundColor DarkYellow 
+ Write-Host `Connected Services $ConnectedServices -ForegroundColor DarkYellow 
 }
