@@ -27,14 +27,31 @@ Function Get-SavedCredential([string]$KeyPath)
 }
 
 $UserName, $SecureString = Get-SavedCredential  -KeyPath "Credentials"
+#################### * Edit Section *  ########################################
+#Edit this path to where program is located
+$outputFileHomeDir = "C:\Users\codem\Documents\WMU\SeniorDesign"
+#Edit where to see output & input files
+$MainFolder = "C:\temp"
+$InputPath = $MainFolder + "\input.txt"
+$LogPath = $MainFolder + "\log"
+$CsvPath = $MainFolder + "\csv"
+$HtmlPath = $MainFolder + "\html"
+###############################################################################
+#Testing Output folder path, if not seen then it will be created
+if (! (Test-Path $MainFolder)) {New-Item $MainFolder -ItemType Directory}
+if (! (Test-Path $LogPath)) {New-Item $LogPath -ItemType Directory}
+if (! (Test-Path $CsvPath)) {New-Item $CsvPath -ItemType Directory}
+if (! (Test-Path $HtmlPath)) {New-Item $HtmlPath -ItemType Directory}
 
-#Set-Location -Path "C:\Users\codem\Documents\Code\OIT DEV"
-#.\GroupActivityReport.ps1
+#Test to see if in correct directory of program
+if(! (Test-Path -Path "$outputFileHomeDir")){
+   Set-Location -Path "$outputFileHomeDir"
+}
+
+##Edit which tenant to use after SharePointHostName
 ./ConnectO365Services.ps1 -Services AzureAD, ExchangeOnline, SharePoint, Teams -SharePointHostName wmutest1 -UserName $UserName -Password $SecureString
 
 #z:\ConnectO365Services.ps1 -Services AzureAD, ExchangeOnline, SharePoint, Teams -SharePointHostName wmich -UserName $UserName -Password $SecureString
-
-# CLS #Clears text printed above
  
 $OrgName = (Get-OrganizationConfig).Name  
        
@@ -46,19 +63,22 @@ Write-Host "Checking Microsoft 365 Groups and Teams in the tenant:" $OrgName
 $WarningDate = (Get-Date).AddDays(-90);
 $WarningEmailDate = (Get-Date).AddDays(-365);
 $Today = (Get-Date);
-$Date = $Today.ToShortDateString()
+$Date = $Today.ToShortDateString();
 
-$TeamsGroups = 0;  $TeamsEnabled = $False; $ObsoleteSPOGroups = 0; $ObsoleteEmailGroups = 0
+$TeamsGroups = 0;  
+$TeamsEnabled = $False; 
+$ObsoleteSPOGroups = 0; 
+$ObsoleteEmailGroups = 0;
 
 $startTime = Get-Date
-$startTimeISO = Get-Date($StartTime) -format "yyyyMMdd HHmmss"
+$startTimeISO = Get-Date($StartTime) -format "yyyyMMdd_HHmmss"
 
-$TextFileName = "C:\temp\log\" + $startTimeISO + "_log.text"
+$TextFileName = $LogPath + "\" + $startTimeISO + "_log.text"
 Start-Transcript -Path $TextFileName
 
 $Report = [System.Collections.Generic.List[Object]]::new()
-$ReportFile = "C:\temp\html\" + $startTimeISO + "_GroupsActivityReport.html"
-$CSVFile = "C:\temp\csv\" + $startTimeISO + "_GroupsActivityReport.csv"
+$ReportFile = $HtmlPath + "\" + $startTimeISO + "_GroupsActivityReport.html"
+$CSVFile = $CsvPath + "\" + $startTimeISO + "_GroupsActivityReport.csv"
 
 $htmlhead="<html>
 	   <style>
@@ -88,10 +108,13 @@ Write-Host "Start fetching Microsoft 365 Groups for checking at $($GroupCheckSta
 [Int]$GroupsCount = 0;
 [int]$TeamsCount = 0;
 $TeamsList = @{};
-$UsedGroups = $False
+$UsedGroups = $False;
 
-if (Test-Path "C:\Temp\Input.txt"){
-   $Content = Get-Content -Path C:\Temp\Input.txt 
+
+if (Test-Path "$InputPath"){
+   $Content = Get-Content -Path $InputPath
+   $GroupsCount = (Get-Content $InputPath).count
+   $GroupsNum = $GroupsCount
 }
 else{
    $Groups = $NULL
@@ -109,10 +132,11 @@ if($Groups -eq $NULL){
    If ($GroupsCount -eq 0) { # 
       Write-Host "Fetching Groups using Get-UnifiedGroup"
       $Groups = Get-UnifiedGroup -ResultSize Unlimited | Sort-Object DisplayName 
-      $GroupsCount = $Groups.Count; $UsedGroups = $True
-
-      If ($GroupsCount -eq 0) {
-      Write-Host "No Microsoft 365 Groups found; script exiting" ; break} 
+      $GroupsCount = $Groups.Count;
+      $UsedGroups = $True
+   }
+   If ($GroupsCount -eq 0) {
+      Write-Host "No Microsoft 365 Groups found; script exiting" ; break
    } # End If
 
    #End time for Groups Fetch
@@ -140,22 +164,46 @@ if($Groups -eq $NULL){
 }
 else{
    #Read groups and total number from input file
-
-   #do something with the $content var created to make the groups alias identity the group object in the cloud
-
-   #Get-UnifiedGroup -Identity "adamnewsted" | Format-List
-   #$Groups = Get-Recipient -RecipientTypeDetails GroupMailbox | Sort-Object DisplayName
-
+   for ($i = 0; $i -lt $GroupNum; $i++) {
+      $newG = Get-Recipient -RecipientTypeDetails GroupMailbox -Identity $Content| Sort-Object DisplayName
+         
+      $Groups = $Groups + $newG
+   }
    $GroupsCount = $Groups.Count
 
-   If ($UsedGroups -eq $False) { # Populate the Teams hash table with a call to Get-UnifiedGroup
-      Get-UnifiedGroup -Filter {ResourceProvisioningOptions -eq "Team"} -ResultSize Unlimited | ForEach { $TeamsList.Add($_.ExternalDirectoryObjectId, $_.DisplayName) } }
-   Else { # We already have the $Groups variable populated with data, so extract the Teams from that data
-      $Groups | ? {$_.ResourceProvisioningOptions -eq "Team"} | ForEach { $TeamsList.Add($_.ExternalDirectoryObjectId, $_.DisplayName) } }
+   # If we don't find any groups (possible with Get-Recipient on a bad day), try to find them with Get-UnifiedGroup before giving up.
+   If ($GroupsCount -eq 0) { # 
+      Write-Host "Fetching Groups using Get-UnifiedGroup"
+      $Groups = Get-UnifiedGroup -Identity $Content -ResultSize $GroupsNum| Sort-Object DisplayName 
+      $GroupsCount = $Groups.Count
+      $UsedGroups = $True
 
+   If ($GroupsCount -eq 0) {
+      Write-Host "No Microsoft 365 Groups found; script exiting" ; break} 
+   } # End If
+
+   #End time for Groups Fetch
+   $GroupCheckEndTime = Get-Date
+   Write-Host "`n Group Fetch Time:   $($GroupCheckEndTime.ToString("yyyy-MM-dd HH:mm:ss")) `n"
+   $GroupRunTime = New-TimeSpan -End $GroupCheckEndTime -Start $GroupCheckStartTime
+   Write-Host "Group Fetch ran for" $GroupRunTime.toString("mm' minutes 'ss' seconds'") "`n"
+
+   #Start time for Teams Fetch
+   $TeamsCheckStartTime = Get-Date
+   Write-Host "Populating list of Teams at $TeamsCheckStartTime"
+
+   If ($UsedGroups -eq $False) { # Populate the Teams hash table with a call to Get-UnifiedGroup
+      Get-UnifiedGroup -Filter {ResourceProvisioningOptions -eq "Team"} -Identity $Content | ForEach { $TeamsList.Add($_.ExternalDirectoryObjectId, $_.DisplayName) } }
+   Else { # We already have the $Groups variable populated with data, so extract the Teams from that data
+      $Groups | ? {$_.ResourceProvisioningOptions -eq "Team"} | ForEach { $TeamsList.Add($_.ExternalDirectoryObjectId, $_.DisplayName) }}
    $TeamsCount = $TeamsList.Count
-}
-#Write-Output $Groups   
+
+   #End time for Teams Fetch
+   $TeamsCheckEndTime = Get-Date
+   Write-Host "`n Teams Fetch Time:   $($TeamsCheckEndTime.ToString("yyyy-MM-dd HH:mm:ss")) `n"
+   $TeamsRunTime = New-TimeSpan -End $TeamsCheckEndTime -Start $TeamsCheckStartTime
+   Write-Host "Teams Fetch ran for" $TeamsRunTime.toString("mm' minutes 'ss' seconds'") "`n"
+} 
 
 # Set up progress bar
 $ProgDelta = 100/($GroupsCount);
@@ -170,12 +218,6 @@ Write-Host "`nStart processing of $GroupsCount groups at $($MainStartTime.ToStri
 # Main loop
 ForEach ($Group in $Groups) { #Because we fetched the list of groups with Get-Recipient, the first thing is to get the group properties
    try {
-         <#if([String]::IsNullOrWhiteSpace((Get-content C:\Temp\Input.txt))){
-            $G = Get-UnifiedGroup -Identity $Group.DistinguishedName
-         }
-         else{
-            $G = Get-UnifiedGroup -Identity "Deletable Test Team" $Group.DistinguishedName
-         }#>
          $G = Get-UnifiedGroup -Identity $Group.DistinguishedName
          $GroupNumber++
          $GroupStatus = $G.DisplayName + " ["+ $GroupNumber +"/" + $GroupsCount + "]"
@@ -195,13 +237,13 @@ ForEach ($Group in $Groups) { #Because we fetched the list of groups with Get-Re
          $TeamsEnabled = $False;
          $LastItemAddedtoTeams = "N/A";
          $MailboxStatus = $Null;
-         $ObsoleteReportLine = "  "
+         $ObsoleteReportLine = "  ";
    
          # Check who manages the group
          $ManagedBy = $G.ManagedBy
          If ([string]::IsNullOrWhiteSpace($ManagedBy) -and [string]::IsNullOrEmpty($ManagedBy)) {
             $ManagedBy = "***NO OWNERS!***"
-            Write-Host "  $G.DisplayName has no group owners!" -ForegroundColor Red }
+            Write-Host $G.DisplayName "has no group owners!" -ForegroundColor Red }
          Else {
             $ManagedBy = $G.ManagedBy -join ", "
          }
@@ -214,13 +256,14 @@ ForEach ($Group in $Groups) { #Because we fetched the list of groups with Get-Re
          If ([string]::IsNullOrEmpty($Data.NewestItemReceivedDate)) {
             $LastConversation = "No items found"}
          Else {
-            $LastConversation = Get-Date ($Data.NewestItemReceivedDate) -Format g
+            $LastConversation = Get-Date($Data.NewestItemReceivedDate) -format "yyyy-MM-dd HH:mm:ss"
          }
          $NumberConversations = $Data.ItemsInFolder
          $MailboxStatus = "Normal"
            
          If ($Data.NewestItemReceivedDate -le $WarningEmailDate) {
-            Write-Host "Last conversation item created in" $G.DisplayName "was" $Data.NewestItemReceivedDate "-> Obsolete?"
+            $DateFormat = Get-Date($Data.NewestItemReceivedDate) -format "yyyy-MM-dd HH:mm:ss"
+            Write-Host "Last conversation item created in" $G.DisplayName "was" $DateFormat "-> Obsolete?"
             $ObsoleteReportLine = $ObsoleteReportLine + "Last Outlook conversation dated: " + $LastConversation + ". "
             $MailboxStatus = "Group Inbox Not Recently Used"
             $ObsoleteEmailGroups++
@@ -291,7 +334,7 @@ ForEach ($Group in $Groups) { #Because we fetched the list of groups with Get-Re
             # Start by looking in the new location (TeamsMessagesData in Non-IPMRoot)
             $TeamsChatData = (Get-ExoMailboxFolderStatistics -Identity $G.ExternalDirectoryObjectId -IncludeOldestAndNewestItems -FolderScope NonIPMRoot | ? {$_.FolderType -eq "TeamsMessagesData" })
             If ($TeamsChatData.ItemsInFolder -gt 0) {
-               $LastItemAddedtoTeams = Get-Date ($TeamsChatData.NewestItemReceivedDate) -Format g}
+               $LastItemAddedtoTeams = Get-Date($TeamsChatData.NewestItemReceivedDate) -format "yyyy-MM-dd HH:mm:ss"}
             $NumberOfChats = $TeamsChatData.ItemsInFolder
              
             # If the script is running before 1-Jun-2021, we need to check the old location of the Teams compliance records
@@ -302,7 +345,7 @@ ForEach ($Group in $Groups) { #Because we fetched the list of groups with Get-Re
                   # We might have one or two subfolders in Conversation History; find the one for Teams
                   If ($T.FolderType -eq "TeamChat") {
                      If ($T.ItemsInFolder -gt 0) {
-                        $OldLastItemAddedtoTeams = Get-Date ($T.NewestItemReceivedDate) -Format g
+                        $OldLastItemAddedtoTeams = Get-Date($T.NewestItemReceivedDate) -format "yyyy-MM-dd HH:mm:ss"
                      }
                      $OldNumberofChats = $T.ItemsInFolder
                   }
@@ -324,9 +367,9 @@ ForEach ($Group in $Groups) { #Because we fetched the list of groups with Get-Re
          
          # Generate a line for this group and store it in the report
          $ReportLine = [PSCustomObject][Ordered]@{
-            'Group Id'                                                              = $G.Id
+            'Unified Group Id'                                                      = $G.Guid
             'Group Name'                                                            = $G.DisplayName
-            'Group Creation Date'                                                   = Get-Date ($G.WhenCreated) -UFormat "%b/%d/%Y"
+            'Group Creation Date'                                                   = Get-Date ($G.WhenCreated) -format "yyyy-MM-dd HH:mm:ss"
             'Group Owners'                                                          = $ManagedBy
             Members                                                                 = $G.GroupMemberCount
             'External Guests'                                                       = $G.GroupExternalMemberCount
@@ -400,3 +443,4 @@ ForEach ($Group in $Groups) { #Because we fetched the list of groups with Get-Re
    #Disconnect SharePoint connection
    Disconnect-SPOService
    Write-Host "All sessions in the current window has been removed." -ForegroundColor Yellow
+#>
